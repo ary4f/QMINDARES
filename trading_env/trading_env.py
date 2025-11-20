@@ -1,7 +1,8 @@
 import numpy as np
 
 def softmax(x):
-    """Stable softmax implementation (turns any action vector into valid portfolio weights: values >= 0 + sum to 1 + no shorting allowed (long-only) + uses a stable version to avoid numeric overflow)"""
+    """Stable softmax implementation (turns any action vector into valid portfolio weights: values >= 0 + sum to 1 + no shorting allowed (long-only) + large positive actions get more weight + uses a stable version to avoid numeric overflow)"""
+
     x = np.array(x)
     x = x - np.max(x)  # improves numerical stability since it subtracts each element in the np.array from the largest element in x
     exp_x = np.exp(x)  # exponentials are used to turn raw scores into metrics with relative importance
@@ -14,7 +15,7 @@ class TradingEnv:
         R: numpy matrix of shape [T, A]
         dates: list of length T
         assets: list of length A
-        window: number of past days to include in observation
+        window: number of past days to include in observation (last 'n' number of rows to take from the current timestamps available)
         cost_bps: transaction cost in basis points (bps) -> 1 bps = 0.01% (which is 0.0001 as a decimal) so 10 bps = 0.1%, 50 = 0.5, 100 = 1%, etc
         """
 
@@ -39,7 +40,6 @@ class TradingEnv:
     def reset(self, seed=0):
         """
         Reset the environment to the starting point.
-            
         Returns:
             obs: numpy array of shape (window, A)
                  The last `window` rows of R starting at day 0.
@@ -53,7 +53,49 @@ class TradingEnv:
         self.prev_w = np.ones(self.A) / self.A
 
         # Observation = past `window` days of returns
-        obs = self.R[self.t - self.window : self.t, :] # eg: ig windows=2, t=2 -> rows 0 and 1 .... obs = R[t-window:t]
+        obs = self.R[self.t - self.window : self.t, :] # eg: if windows=2, t=2 -> rows 0 and 1 .... obs = R[t-window:t]
 
         return obs
+    
+    def step(self, action):
+        """
+        Take one step (one trading day) in the environment.
+        action: raw action vector of length A (the larger the action number, the more the agent wants to invest and so the weight for this should be bigger too after using softmax)
+        Returns:
+            next_obs: next window of returns (or None if done)
+            reward: portfolio return after costs
+            done: True when episode is finished
+            info: extra debugging info
+        """
+
+        w = softmax(action) # converting raw action to valid portfolio weights using softmax 
+        r_t = self.R[self.t] # accessing today's asset returns from the matrix R and accessing each row of return values (using self.t since t is time and each row is a different day timestamp)
+        reward_raw = np.dot(w, r_t) # raw portfolio returns obtained using dot product -> (weights · returns_today) part of the final reward formula 
+        turnover = np.sum(np.abs(w - self.prev_w)) # difference between the new and old weights -> sum(|w_t − w_{t-1}|) part of the final reward formula 
+        cost = self.cost * 0.5 * turnover # half on buy, half on sell (also self.cost from the init implementation of the class already has cost_bps/1e4 implemented in it)
+
+        reward = reward_raw - cost # reward final formula 
+
+        self.prev_w = w # for the next step, the previous weight becomes the current weight 
+        self.t += 1 # next day
+        done = self.t >= len(self.R) # checking if we're now past the last available day
+
+        if not done:
+            next_obs = self.R[self.t - self.window: self.t, :]
+        else:
+            next_obs = None
+
+        # extra debugging info
+        info = {
+            "date": self.dates[self.t - 1],
+            "weights": w,
+            "raw_return": reward_raw,
+            "turnover": turnover,
+            "transaction_cost": cost,
+        }
+
+        return next_obs, reward, done, info 
+        
+
+
 
