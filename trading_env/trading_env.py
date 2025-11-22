@@ -19,7 +19,7 @@ class TradingEnv(gym.Env):
         # Convert cost from bps to decimal (10 bps = 0.001)
         self.cost = cost_bps / 1e4
 
-        # Add CASH as an asset (optional)
+        # Add CASH as an asset
         if include_cash:
             cash_col = np.zeros((self.R.shape[0], 1))  # cash has 0 return
             self.R = np.concatenate([self.R, cash_col], axis=1)
@@ -34,7 +34,7 @@ class TradingEnv(gym.Env):
         # Previous weights start equal-weight
         self.prev_w = np.ones(self.A) / self.A
 
-        # Define ACTION SPACE
+        # Define action space
         # Raw action vector (will be softmaxed)
         self.action_space = spaces.Box(
             low=-np.inf, high=np.inf,
@@ -42,7 +42,7 @@ class TradingEnv(gym.Env):
             dtype=np.float32
         )
 
-        # Define OBSERVATION SPACE
+        # Define observation space
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
