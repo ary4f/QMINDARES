@@ -1,4 +1,5 @@
 import numpy as np
+import csv   
 
 def softmax(x):
     """Stable softmax implementation (turns any action vector into valid portfolio weights: values >= 0 + sum to 1 + no shorting allowed (long-only) + large positive actions get more weight + uses a stable version to avoid numeric overflow)"""
@@ -95,7 +96,46 @@ class TradingEnv:
         }
 
         return next_obs, reward, done, info 
-        
+    
+def equal_weight_policy(n_assets):
+    """
+    This function creates a raw action vector where every asset has the same preference (we return ones since softmax will convert it to valid portfolio weights anyways)
+    eg: if we have n_assets = 4, then np.ones will return [1,1,1,1] and then softmax will return [0.25,0.25,0.25,0.25]
+    """
+    return np.ones(n_assets)
+
+def random_policy(n_assets, seed=None):
+    """
+    This function generates random raw actions for testing the environment
+    The difference with this and the equal_weight_policy function is that this returns values that are completely unbonded (negative, large positive -> literally anything) and then softmax takes all that and converts it
+    eg: we might have [1.764, 0.400, 0.979, 2.240] as a randomly generated action vector, softmax(action) then takes this and converts it to something. 
+    note: the larger the number is (positive), the more weight gets assigned since the agent signifies to put more emphasis on that asset type. so 2.240 will have more weight assigned than the rest, and 0.400 will have the least
+    """
+    if seed is not None:
+        np.random.seed(seed)
+    return np.random.randn(n_assets)
+
+def rollout(env, policy_fn, out_csv="data/returns_EQW.csv"):
+    """
+    This function runs the environment from start to finish using a given policy function and saves (date, daily returns) into a CSV file
+    """
+    obs = env.reset()
+    done = False # boolean to tell us when the episode is complete i.e. t >= len(R)
+    results = [] # this will hold tuples i.e. (date, daily_portfolio_return) so like [ (d1, r1), (d2, r2), ... , (dn, rn)]
+    
+    while not done:
+        action = policy_fn(env.A) # calls policy function. env.A is the number of assets so that it returns an action vector of length 'A'
+        next_obs, reward, done, info = env.step(action) # this runs the full trading env step and calculates the portfolio return, trans cost and reward, then advances time and returns updates information 
+        results.append((info["date"], reward))
+        obs = next_obs
+
+    with open(out_csv, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["date", "ret"])
+        for date, ret in results:
+            writer.writerow([date, ret])
+    
+    print(f"Rollout complete. Saved to {out_csv}")
 
 
 
