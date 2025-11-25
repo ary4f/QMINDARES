@@ -1,6 +1,14 @@
 ## QMINDARES — Tasks
 
 
+### Setup (everyone run this first)
+
+**1. Install dependencies:**
+pip install gymnasium numpy pandas stable-baselines3 torch
+
+**2. Verify environment loads:**
+python Tradingenv.py --csv data/prices_returns.csv Expected: `Env ready: T=2472, A=5, window=20...`
+
 ### quick summary of whats done/changes I made to current code:
 
 Data pipeline:
